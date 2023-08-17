@@ -295,7 +295,7 @@ unimplementedInstruction :: proc(state: ^State8080) {
 setZSP :: proc(result: u16, cc: ^ConditionCodes) {
     cc.z = (result & 0xff) == 0
     cc.s = (result & 0x80) != 0
-    cc.p = parity(result, 0)
+    cc.p = parity(result, 8)
 }
 
 setZSPC :: proc(result: u16, cc: ^ConditionCodes) {
@@ -357,11 +357,6 @@ lxi :: proc(reg1: ^u8, reg2: ^u8, memory: []u8) -> int {
     return 3
 }
 
-mvi :: proc(reg: ^u8, data: u8) -> int {
-    reg^ = data
-    return 2
-}
-
 stax :: proc(high: u8, low: u8, state: ^State8080) -> int {
     offset := get_combined(high, low)
     state.memory[offset] = state.a
@@ -401,16 +396,39 @@ dcr :: proc(reg: ^u8, cc: ^ConditionCodes) -> int {
     return 1
 }
 
+//dad :: proc(reg1: u8, reg2: u8, state: ^State8080) -> int {
+dad :: proc(value: u16, state: ^State8080) -> int {
+    //value := get_combined(reg1, reg2)
+    hl := u32(getHL(state)) + u32(value)
+
+    state.cc.cy = (hl & 0xffff) != hl
+
+    hl16 := u16(hl & 0xffff)
+    state.h = get_high(hl16)
+    state.l = get_low(hl16)
+
+    return 1
+}
+
+cmp :: proc(value: u8, state: ^State8080) -> int {
+    //S, P, and A aren't changed???
+    result := state.a - value
+    setZSP(u16(result), &state.cc)
+    state.cc.cy = state.a < value
+    return 1
+}
+
 // Implement all the jump instructions. Since the differences are the
 // jump conditions, it is also passed in as an argument
 jump :: proc(state: ^State8080, cond: bool) -> int {
-    pc_delt := 3
-    if cond {
-        offset := getImmediate(state)
-        state.pc = auto_cast offset
-        pc_delt = 0
-    }
-    return pc_delt
+    //pc_delt := 3
+    if !cond do return 3
+    //if cond {
+    offset := getImmediate(state)
+    state.pc = auto_cast offset
+    //pc_delt = 0
+    //}
+    return 0
 }
 
 mov :: proc(dest: ^u8, source: ^u8) -> int {
@@ -435,7 +453,10 @@ swap :: proc(reg1: ^u8, reg2: ^u8) -> int {
     return 1
 }
 
-call :: proc(state: ^State8080) -> int {
+call :: proc(state: ^State8080, cond: bool) -> int {
+
+    if !cond do return 3
+
     retAddr := u16(state.pc) + 3 //CALL is 3 bytes so address of next address is 3 larger
     state.memory[state.sp - 1] = get_high(retAddr)
     state.memory[state.sp - 2] = get_low(retAddr)
@@ -455,15 +476,15 @@ ret :: proc(state: ^State8080) -> int {
 }
 
 // Functions to push and pop values off the stack.
-// Order of input registers should be b,c/d,e/h,l
-push :: proc(reg1: u8, reg2: u8, state: ^State8080) -> int {
+// Order of input registers should be b,c / d,e / h,l
+pushR :: proc(reg1: u8, reg2: u8, state: ^State8080) -> int {
     state.memory[state.sp-2] = reg2
     state.memory[state.sp-1] = reg1
     state.sp -= 2
     return 1
 }
 
-pop :: proc(reg1: ^u8, reg2: ^u8, state: ^State8080) -> int {
+popR :: proc(reg1: ^u8, reg2: ^u8, state: ^State8080) -> int {
     reg2^ = state.memory[state.sp]
     reg1^ = state.memory[state.sp+1]
     state.sp += 2
@@ -472,7 +493,7 @@ pop :: proc(reg1: ^u8, reg2: ^u8, state: ^State8080) -> int {
 
 @(private="file")
 get_high :: proc(value: u16) -> u8 {
-    out : u8 = auto_cast value >> 8 & 0xff
+    out : u8 = auto_cast (value >> 8) & 0xff
     return out
 }
 
@@ -519,6 +540,26 @@ getImmediate :: proc(state: ^State8080) -> u16 {
     return get_combined(state.memory[state.pc+2], state.memory[state.pc+1])
 }
 
+conditionCodesToU8 :: proc(cc: ^ConditionCodes) -> u8 {
+    value : u8 = 1 << 6
+
+    value = cc.cy ? value | (1 << 7) : value
+    value = cc.p ? value | (1 << 5) : value
+    value = cc.ac ? value | (1 << 3) : value
+    value = cc.z ? value | (1 << 1) : value
+    value = cc.s ? value | 1 : value
+
+    return value
+}
+
+u8ToConditionCodes :: proc(value: u8, cc: ^ConditionCodes) {
+    cc.cy = value & (1 << 7) > 0
+    cc.p = value & (1 << 5) > 0
+    cc.ac = value & (1 << 3) > 0
+    cc.z = value & (1 << 1) > 0
+    cc.s = value & 1 > 0
+}
+
 emuluate8080p :: proc(state: ^State8080) -> int {
     opcode : OpCode = auto_cast state.memory[state.pc]
     pc_delt : int = 0
@@ -545,6 +586,25 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = ana(value, state)
         case .ANA_A:
             pc_delt = ana(state.a, state)
+        case .XRA_B:
+            pc_delt = xra(state.b, state)
+        case .XRA_C:
+            pc_delt = xra(state.c, state)
+        case .XRA_D:
+            pc_delt = xra(state.d, state)
+        case .XRA_E:
+            pc_delt = xra(state.e, state)
+        case .XRA_H:
+            pc_delt = xra(state.h, state)
+        case .XRA_L:
+            pc_delt = xra(state.l, state)
+        case .XRA_M:
+            value := getM(state)
+            pc_delt = xra(value, state)
+        case .XRA_A:
+            pc_delt = xra(state.a, state)
+        case .INR_D:
+            pc_delt = inr(&state.d, &state.cc)
         case .DCR_B:
             pc_delt = dcr(&state.b, &state.cc)
         case .DCX_B:
@@ -567,6 +627,10 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             offset := getDE(state)
             state.a = state.memory[offset]
             pc_delt = 1
+        case .LDA:
+            offset := getImmediate(state)
+            state.a = state.memory[offset]
+            pc_delt = 1
         case .LXI_B:
             pc_delt = lxi(&state.b, &state.c, state.memory[state.pc+1:state.pc+3])
         case .LXI_D:
@@ -578,7 +642,22 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             state.sp = data
             pc_delt = 3
         case .MVI_B:
-            pc_delt = mvi(&state.b, state.memory[state.pc+1])
+            pc_delt = mov(&state.b, &state.memory[state.pc+1]) + 1
+        case .MVI_C:
+            pc_delt = mov(&state.c, &state.memory[state.pc+1]) + 1
+        case .MVI_D:
+            pc_delt = mov(&state.d, &state.memory[state.pc+1]) + 1
+        case .MVI_E:
+            pc_delt = mov(&state.e, &state.memory[state.pc+1]) + 1
+        case .MVI_H:
+            pc_delt = mov(&state.h, &state.memory[state.pc+1]) + 1
+        case .MVI_L:
+            pc_delt = mov(&state.l, &state.memory[state.pc+1]) + 1
+        case .MVI_M:
+            setM(state.memory[state.pc+1], state)
+            pc_delt = 2
+        case .MVI_A:
+            pc_delt = mov(&state.a, &state.memory[state.pc+1]) + 1
         case .STAX_B:
             pc_delt = stax(state.b, state.c, state)
         case .MOV_B_B:
@@ -596,6 +675,40 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .MOV_B_M:
             data := getM(state)
             pc_delt = mov(&state.b, &data)
+        case .MOV_H_B:
+            pc_delt = mov(&state.h, &state.b)
+        case .MOV_H_C:
+            pc_delt = mov(&state.h, &state.c)
+        case .MOV_H_D:
+            pc_delt = mov(&state.h, &state.d)
+        case .MOV_H_E:
+            pc_delt = mov(&state.h, &state.e)
+        case .MOV_H_H:
+            pc_delt = mov(&state.h, &state.h)
+        case .MOV_H_L:
+            pc_delt = mov(&state.h, &state.l)
+        case .MOV_H_M:
+            data := getM(state)
+            pc_delt = mov(&state.h, &data)
+        case .MOV_H_A:
+            pc_delt = mov(&state.h, &state.a)
+        case .MOV_L_B:
+            pc_delt = mov(&state.l, &state.b)
+        case .MOV_L_C:
+            pc_delt = mov(&state.l, &state.c)
+        case .MOV_L_D:
+            pc_delt = mov(&state.l, &state.d)
+        case .MOV_L_E:
+            pc_delt = mov(&state.l, &state.e)
+        case .MOV_L_H:
+            pc_delt = mov(&state.l, &state.h)
+        case .MOV_L_L:
+            pc_delt = mov(&state.l, &state.l)
+        case .MOV_L_M:
+            data := getM(state)
+            pc_delt = mov(&state.l, &data)
+        case .MOV_L_A:
+            pc_delt = mov(&state.l, &state.a)
         case .MOV_M_B:
             setM(state.b, state)
             pc_delt = 1
@@ -621,9 +734,23 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             //Currently getM returns a copy of the data and not a pointer
             //data := getM(state)
             //pc_delt = mov(&data, &state.a)
+        case .MOV_A_B:
+            pc_delt = mov(&state.a, &state.b)
+        case .MOV_A_C:
+            pc_delt = mov(&state.a, &state.c)
+        case .MOV_A_D:
+            pc_delt = mov(&state.a, &state.d)
+        case .MOV_A_E:
+            pc_delt = mov(&state.a, &state.e)
+        case .MOV_A_H:
+            pc_delt = mov(&state.a, &state.h)
+        case .MOV_A_L:
+            pc_delt = mov(&state.a, &state.l)
         case .MOV_A_M:
             data := getM(state)
             pc_delt = mov(&state.a, &data)
+        case .MOV_A_A:
+            pc_delt = mov(&state.a, &state.a)
         case .ADD_A:
             pc_delt = add(state.a, state)
         case .ADD_B:
@@ -663,15 +790,11 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .CMC:
             state.cc.cy = !state.cc.cy
         case .CALL:
-            pc_delt = call(state)
-            /*
-            retAddr := u16(state.pc) + 3 //CALL is 3 bytes so address of next address is 3 larger
-            state.memory[state.sp - 1] = get_high(retAddr)
-            state.memory[state.sp - 2] = get_low(retAddr)
-            state.sp -= 2
-            state.pc = auto_cast getImmediate(state)
-            pc_delt = 0
-            */
+            pc_delt = call(state, true)
+        case .CC:
+            pc_delt = call(state, state.cc.cy)
+        case .CNC:
+            pc_delt = call(state, !state.cc.cy)
         case .RET:
             pc_delt = ret(state)
         case .EI:
@@ -680,19 +803,56 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .DI:
             state.int_enable = false
             pc_delt = 1
+        case .PUSH_B:
+            pc_delt = pushR(state.b, state.c, state)
+        case .PUSH_D:
+            pc_delt = pushR(state.d, state.e, state)
+        case .PUSH_H:
+            pc_delt = pushR(state.h, state.l, state)
+        case .PUSH_PSW:
+            ccInt := conditionCodesToU8(&state.cc)
+            pc_delt = pushR(state.a, ccInt, state)
+        case .POP_B:
+            pc_delt = popR(&state.b, &state.c, state)
+        case .POP_D:
+            pc_delt = popR(&state.d, &state.e, state)
+        case .POP_H:
+            pc_delt = popR(&state.h, &state.l, state)
+        case .POP_PSW:
+            ccInt : u8
+            pc_delt = popR(&state.a, &ccInt, state)
+            u8ToConditionCodes(ccInt, &state.cc)
+        case .CPI:
+            value := state.memory[state.pc+1]
+            pc_delt = cmp(value, state) + 1
+        case .DAD_B:
+            //pc_delt = dad(state.b, state.c, state)
+            pc_delt = dad(get_combined(state.b, state.c), state)
+        case .DAD_D:
+            //pc_delt = dad(state.d, state.e, state)
+            pc_delt = dad(get_combined(state.b, state.c), state)
+        case .DAD_H:
+            //pc_delt = dad(state.h, state.l, state)
+            pc_delt = dad(get_combined(state.b, state.c), state)
+        case .DAD_SP:
+            pc_delt = dad(state.sp, state)
+        case .XCHG:
+            state.h, state.d = state.d, state.h
+            state.l, state.e = state.e, state.l
+            pc_delt = 1
+        case .OUT:
+            pc_delt = 1
+        case .IN:
+            pc_delt = 1
         case:
             unimplementedInstruction(state)
     }
 
-    /*
-    if pc_delt == 0 {
-        unimplementedInstruction(state)
-    } else if pc_delt < 0 {
-        //Do nothing since it was a jump
-    } else {
-        state.pc += pc_delt
-    }
-    */
     state.pc += pc_delt
+    
+    printRegisters(state)
+    printConditionCodes(&state.cc)
+    fmt.printf("\n")
+    
     return 1
 }

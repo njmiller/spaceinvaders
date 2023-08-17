@@ -3,8 +3,20 @@ package spaceinvaders
 import "core:fmt"
 
 printRegisters :: proc(state: ^State8080) {
-    fmt.printf("$02x $02x $02x $02x $02x $02x $02x $04x $02x", state.a, state.b, state.c, state.d,
-                state.e, state.h, state.l, state.sp, state.pc)
+    fmt.printf("          A: $%02x, BC: $%02x%02x, DE: $%02x%02x, HL: $%02x%02x, PC: $%02x, SP: $%04x ", state.a, state.b, state.c, state.d,
+                state.e, state.h, state.l, state.pc, state.sp)
+}
+
+printConditionCodes :: proc(cc: ^ConditionCodes) {
+    //fmt.printf("CY: %t, Z: %t, S: %t, P: %t, AC: %t ", cc.cy, cc.z, cc.s, cc.p, cc.ac)
+
+    fmt.printf("Flags: ")
+    if cc.z do fmt.printf("Z")
+    if cc.s do fmt.printf("S")
+    if cc.p do fmt.printf("P")
+    if cc.ac do fmt.printf("A")
+    if cc.cy do fmt.printf("C")
+    
 }
 
 simpleInstruction :: proc(text: string) -> int {
@@ -150,7 +162,7 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .NOP8:
             return simpleInstruction("NOP")
         case .DAD_SP:
-            return simpleInstruction("DAD SP")
+            return simpleInstruction("DAD    SP")
         case .LDA:
             return twoByteInstruction("LDA    ", code[2], code[1])
         case .DCX_SP:
@@ -458,7 +470,7 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .JNC:
             return twoByteInstruction("JNC    ", code[2], code[1])
         case .OUT:
-            return byteInstruction("OUT", code[1])
+            return byteInstruction("OUT    #", code[1])
         case .CNC:
             return twoByteInstruction("CNC    ", code[2], code[1])
         case .PUSH_D:
@@ -544,7 +556,7 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .NOP13:
             return simpleInstruction("NOP")
         case .CPI:
-            return byteInstruction("CPI", code[1])
+            return byteInstruction("CPI    ", code[1])
         case .RST_7:
             return simpleInstruction("RST    7")
     }
