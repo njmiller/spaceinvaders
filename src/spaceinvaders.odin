@@ -22,8 +22,8 @@ main :: proc() {
         
         // Good: 37395
         // 37410
-        //if count == 37470 do break
-        if count == 10 do break
+        if count == 48750 do break
+        //if count == 10 do break
     }
 
 }

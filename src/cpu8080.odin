@@ -655,7 +655,7 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .LDA:
             offset := getImmediate(state)
             state.a = state.memory[offset]
-            pc_delt = 1
+            pc_delt = 3
         case .LXI_B:
             pc_delt = lxi(&state.b, &state.c, state.memory[state.pc+1:state.pc+3])
         case .LXI_D:
@@ -685,6 +685,10 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = mov(&state.a, &state.memory[state.pc+1]) + 1
         case .STAX_B:
             pc_delt = stax(state.b, state.c, state)
+        case .STA:
+            offset := getImmediate(state)
+            state.memory[offset] = state.a
+            pc_delt = 3
         case .MOV_B_B:
             pc_delt = mov(&state.b, &state.b)
         case .MOV_B_C:
@@ -824,10 +828,6 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = add(data, state)
             //Because reading a byte for the addition instead of using register
             pc_delt += 1
-        case .STA:
-            offset := getHL(state)
-            state.memory[offset] = state.a
-            pc_delt = 1
         case .SHLD:
             offset := getImmediate(state)
             state.memory[offset] = state.l
