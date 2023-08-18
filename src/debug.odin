@@ -508,7 +508,7 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .PUSH_H:
             return simpleInstruction("PUSH   H")
         case .ANI:
-            return byteInstruction("ANI", code[1])
+            return byteInstruction("ANI    ,#", code[1])
         case .RST_4:
             return simpleInstruction("RST 4")
         case .RPE:

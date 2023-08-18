@@ -1,6 +1,7 @@
 package spaceinvaders
 
 import "core:fmt"
+import "core:math/bits"
 import "core:os"
 
 OpCode :: enum u8 {
@@ -411,7 +412,6 @@ dad :: proc(value: u16, state: ^State8080) -> int {
 }
 
 cmp :: proc(value: u8, state: ^State8080) -> int {
-    //S, P, and A aren't changed???
     result := state.a - value
     setZSP(u16(result), &state.cc)
     state.cc.cy = state.a < value
@@ -437,13 +437,20 @@ mov :: proc(dest: ^u8, source: ^u8) -> int {
 }
 
 parity :: proc(value: u16, size: uint) -> bool {
+    nbits := bits.count_ones(value)
+    return 0 == (nbits & 0x1)
+
+    /*
     p := 0
     value := (value & ((1<<size)-1))
     for i := 0; i < int(size); i += 1 {
-        if value & 0x1 != 0 do p += 1
+        if (value & 0x1) != 0 do p += 1
         value = value >> 1
     }
+    
+    fmt.println("PARITY:", value, p, nbits)
     return 0 == (p & 0x1)
+    */
 }
 
 swap :: proc(reg1: ^u8, reg2: ^u8) -> int {
@@ -457,7 +464,8 @@ call :: proc(state: ^State8080, cond: bool) -> int {
 
     if !cond do return 3
 
-    retAddr := u16(state.pc) + 3 //CALL is 3 bytes so address of next address is 3 larger
+    //fmt.printf("CALL: %04x\n", state.pc + 3)
+    retAddr := u16(state.pc) + 3
     state.memory[state.sp - 1] = get_high(retAddr)
     state.memory[state.sp - 2] = get_low(retAddr)
     state.sp -= 2
@@ -465,9 +473,21 @@ call :: proc(state: ^State8080, cond: bool) -> int {
     return 0
 }
 
-ret :: proc(state: ^State8080) -> int {
+ret :: proc(state: ^State8080, cond: bool) -> int {
+
+    if !cond do return 1
+
     low := state.memory[state.sp]
     high := state.memory[state.sp + 1]
+
+    retAddr := get_combined(high, low)
+
+    /*
+    tmp1 := state.memory[state.pc+1]
+    tmp2 := state.memory[state.pc+2]
+    tmp := get_combined(tmp2, tmp1)
+    fmt.printf("RET: %04x %04x\n", retAddr, tmp)
+    */
 
     state.pc = auto_cast get_combined(high, low)
     state.sp += 2
@@ -586,6 +606,9 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = ana(value, state)
         case .ANA_A:
             pc_delt = ana(state.a, state)
+        case .ANI:
+            data := state.memory[state.pc+1]
+            pc_delt = ana(data, state) + 1
         case .XRA_B:
             pc_delt = xra(state.b, state)
         case .XRA_C:
@@ -607,6 +630,8 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = inr(&state.d, &state.cc)
         case .DCR_B:
             pc_delt = dcr(&state.b, &state.cc)
+        case .DCR_C:
+            pc_delt = dcr(&state.c, &state.cc)
         case .DCX_B:
             pc_delt = dcx(&state.b, &state.c)
         case .DCX_D:
@@ -675,6 +700,40 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .MOV_B_M:
             data := getM(state)
             pc_delt = mov(&state.b, &data)
+        case .MOV_D_B:
+            pc_delt = mov(&state.d, &state.b)
+        case .MOV_D_C:
+            pc_delt = mov(&state.d, &state.c)
+        case .MOV_D_D:
+            pc_delt = mov(&state.d, &state.d)
+        case .MOV_D_E:
+            pc_delt = mov(&state.d, &state.e)
+        case .MOV_D_H:
+            pc_delt = mov(&state.d, &state.h)
+        case .MOV_D_L:
+            pc_delt = mov(&state.d, &state.l)
+        case .MOV_D_M:
+            data := getM(state)
+            pc_delt = mov(&state.d, &data)
+        case .MOV_D_A:
+            pc_delt = mov(&state.d, &state.a)
+        case .MOV_E_B:
+            pc_delt = mov(&state.e, &state.b)
+        case .MOV_E_C:
+            pc_delt = mov(&state.e, &state.c)
+        case .MOV_E_D:
+            pc_delt = mov(&state.e, &state.d)
+        case .MOV_E_E:
+            pc_delt = mov(&state.e, &state.e)
+        case .MOV_E_H:
+            pc_delt = mov(&state.e, &state.h)
+        case .MOV_E_L:
+            pc_delt = mov(&state.e, &state.l)
+        case .MOV_E_M:
+            data := getM(state)
+            pc_delt = mov(&state.e, &data)
+        case .MOV_E_A:
+            pc_delt = mov(&state.e, &state.a)
         case .MOV_H_B:
             pc_delt = mov(&state.h, &state.b)
         case .MOV_H_C:
@@ -796,7 +855,9 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .CNC:
             pc_delt = call(state, !state.cc.cy)
         case .RET:
-            pc_delt = ret(state)
+            pc_delt = ret(state, true)
+        case .RNC:
+            pc_delt = ret(state, !state.cc.cy)
         case .EI:
             state.int_enable = true
             pc_delt = 1
@@ -830,20 +891,26 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = dad(get_combined(state.b, state.c), state)
         case .DAD_D:
             //pc_delt = dad(state.d, state.e, state)
-            pc_delt = dad(get_combined(state.b, state.c), state)
+            pc_delt = dad(get_combined(state.d, state.e), state)
         case .DAD_H:
             //pc_delt = dad(state.h, state.l, state)
-            pc_delt = dad(get_combined(state.b, state.c), state)
+            pc_delt = dad(get_combined(state.h, state.l), state)
         case .DAD_SP:
             pc_delt = dad(state.sp, state)
         case .XCHG:
             state.h, state.d = state.d, state.h
             state.l, state.e = state.e, state.l
             pc_delt = 1
+        case .RRC:
+            bit := state.a & 0x1
+            state.a = state.a >> 1
+            state.cc.cy = bit != 0
+            state.a = state.a | bit << 7
+            pc_delt = 1
         case .OUT:
-            pc_delt = 1
+            pc_delt = 2
         case .IN:
-            pc_delt = 1
+            pc_delt = 2
         case:
             unimplementedInstruction(state)
     }
@@ -853,6 +920,7 @@ emuluate8080p :: proc(state: ^State8080) -> int {
     printRegisters(state)
     printConditionCodes(&state.cc)
     fmt.printf("\n")
-    
+
+
     return 1
 }

@@ -15,10 +15,15 @@ main :: proc() {
     fmt.println("Size of memory:", len(state.memory))
     count := 0
     for {
-        fmt.printf("%08x ", count)
-        emuluate8080p(&state)
+        //fmt.printf("%08x ", count)
         count += 1
-        if count == 19470 do break
+        fmt.printf("%v ", count)
+        emuluate8080p(&state)
+        
+        // Good: 37395
+        // 37410
+        //if count == 37470 do break
+        if count == 10 do break
     }
 
 }
