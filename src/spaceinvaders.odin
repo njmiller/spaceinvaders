@@ -85,17 +85,19 @@ main :: proc() {
     fmt.println("Size of file:", len(source))
     fmt.println("Size of memory:", len(state.memory))
     count := 0
-    timeval := time.now()
+
+    t_display_updated := time.now()
+    t_interrupt := time.now()
 
     for !rl.WindowShouldClose() {
 
         // Update the display at 60 Hz
-        if time.duration_seconds(time.since(timeval)) > 1.0/60.0 {
+        if time.duration_seconds(time.since(t_display_updated)) > 1.0/60.0 {
             rl.BeginDrawing()
             rl.ClearBackground(rl.WHITE)
             updateDisplay(vram, 1)
             rl.EndDrawing()
-            timeval = time.now()
+            t_display_updated = time.now()
         }
 
         when DEBUG {
@@ -104,16 +106,14 @@ main :: proc() {
         }
         emuluate8080p(&state)
 
-        /*
-        if time.duration_seconds(time.since(timeval)) > 1.0/60.0 {
+        if time.duration_seconds(time.since(t_interrupt)) > 1.0/60.0 {
             if state.int_enable {
-                generateInterrupt(&state, 2)
+                //generateInterrupt(&state, 2)
+                rst(&state, 2)
 
-                timeval = time.now()
+                t_interrupt = time.now()
             }
         }
-        */
-        
         
     }
 

@@ -318,55 +318,55 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .ADD_M:
             return simpleInstruction("ADD    M")
         case .ADD_A:
-            return simpleInstruction("ADD A")
+            return simpleInstruction("ADD    A")
         case .ADC_B:
-            return simpleInstruction("ADC B")
+            return simpleInstruction("ADC    B")
         case .ADC_C:
-            return simpleInstruction("ADC C")
+            return simpleInstruction("ADC    C")
         case .ADC_D:
-            return simpleInstruction("ADC D")
+            return simpleInstruction("ADC    D")
         case .ADC_E:
-            return simpleInstruction("ADC E")
+            return simpleInstruction("ADC    E")
         case .ADC_H:
-            return simpleInstruction("ADC H")
+            return simpleInstruction("ADC    H")
         case .ADC_L:
-            return simpleInstruction("ADC L")
+            return simpleInstruction("ADC    L")
         case .ADC_M:
-            return simpleInstruction("ADC M")
+            return simpleInstruction("ADC    M")
         case .ADC_A:
-            return simpleInstruction("ADC A")
+            return simpleInstruction("ADC    A")
         case .SUB_B:
-            return simpleInstruction("SUB B")
+            return simpleInstruction("SUB    B")
         case .SUB_C:
-            return simpleInstruction("SUB C")
+            return simpleInstruction("SUB    C")
         case .SUB_D:
-            return simpleInstruction("SUB D")
+            return simpleInstruction("SUB    D")
         case .SUB_E:
-            return simpleInstruction("SUB E")
+            return simpleInstruction("SUB    E")
         case .SUB_H:
-            return simpleInstruction("SUB H")
+            return simpleInstruction("SUB    H")
         case .SUB_L:
-            return simpleInstruction("SUB L")
+            return simpleInstruction("SUB    L")
         case .SUB_M:
-            return simpleInstruction("SUB M")
+            return simpleInstruction("SUB    M")
         case .SUB_A:
-            return simpleInstruction("SUB A")
+            return simpleInstruction("SUB    A")
         case .SBB_B:
-            return simpleInstruction("SBB B")
+            return simpleInstruction("SBB    B")
         case .SBB_C:
-            return simpleInstruction("SBB C")
+            return simpleInstruction("SBB    C")
         case .SBB_D:
-            return simpleInstruction("SBB D")
+            return simpleInstruction("SBB    D")
         case .SBB_E:
-            return simpleInstruction("SBB E")
+            return simpleInstruction("SBB    E")
         case .SBB_H:
-            return simpleInstruction("SBB H")
+            return simpleInstruction("SBB    H")
         case .SBB_L:
-            return simpleInstruction("SBB L")
+            return simpleInstruction("SBB    L")
         case .SBB_M:
-            return simpleInstruction("SBB M")
+            return simpleInstruction("SBB    M")
         case .SBB_A:
-            return simpleInstruction("SBB A")
+            return simpleInstruction("SBB    A")
         case .ANA_B:
             return simpleInstruction("ANA    B")
         case .ANA_C:
@@ -476,7 +476,7 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .PUSH_D:
             return simpleInstruction("PUSH   D")
         case .SUI:
-            return byteInstruction("SUI", code[1])
+            return byteInstruction("SUI    #", code[1])
         case .RST_2:
             return simpleInstruction("RST 2")
         case .RC:

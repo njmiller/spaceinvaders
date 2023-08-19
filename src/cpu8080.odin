@@ -4,6 +4,9 @@ import "core:fmt"
 import "core:math/bits"
 import "core:os"
 
+/*TODO: 1. Check for bit rotation stuff in core library for RRC, RLC, etc
+        2. Use addition/subtraction stuff for carry in core.math.bits
+*/ 
 OpCode :: enum u8 {
     NOP = 0x00,
     LXI_B = 0x01,
@@ -290,6 +293,7 @@ State8080 :: struct {
 
 unimplementedInstruction :: proc(state: ^State8080) {
     fmt.printf("Error: Unimplemented instruction\n")
+    disassemble8080p(state.memory, state.pc)
     os.exit(60)
 }
 
@@ -345,6 +349,14 @@ add :: proc(reg1: u8, state: ^State8080) -> int {
     return 1
 }
 
+sub :: proc(reg1: u8, state: ^State8080) -> int {
+    result := u16(state.a) - u16(reg1)
+    setZSPC(result, &state.cc)
+    setAuxCarry(state.a, reg1, &state.cc)
+
+    state.a = auto_cast result & 0xff
+    return 1
+}
 
 adc :: proc(reg1: u8, state: ^State8080) -> int {
     //TODO
@@ -458,6 +470,17 @@ swap :: proc(reg1: ^u8, reg2: ^u8) -> int {
     reg1^ = reg2^
     reg2^ = tmp
     return 1
+}
+
+rst :: proc(state: ^State8080, num: int) -> int {
+    high, low := getHighLow(u16(state.pc+1))
+    //state.memory[state.sp - 1] = high
+    //state.memory[state.sp - 2] = low
+    //state.sp -= 2
+    pushR(high, low, state)
+    state.pc = 8*num
+
+    return 0
 }
 
 call :: proc(state: ^State8080, cond: bool) -> int {
@@ -643,12 +666,42 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = xra(value, state)
         case .XRA_A:
             pc_delt = xra(state.a, state)
+        case .ORA_B:
+            pc_delt = ora(state.b, state)
+        case .ORA_C:
+            pc_delt = ora(state.c, state)
+        case .ORA_D:
+            pc_delt = ora(state.d, state)
+        case .ORA_E:
+            pc_delt = ora(state.e, state)
+        case .ORA_H:
+            pc_delt = ora(state.h, state)
+        case .ORA_L:
+            pc_delt = ora(state.l, state)
+        case .ORA_M:
+            value := getM(state)
+            pc_delt = ora(value, state)
+        case .ORA_A:
+            pc_delt = ora(state.a, state)
         case .INR_D:
             pc_delt = inr(&state.d, &state.cc)
         case .DCR_B:
             pc_delt = dcr(&state.b, &state.cc)
         case .DCR_C:
             pc_delt = dcr(&state.c, &state.cc)
+        case .DCR_D:
+            pc_delt = dcr(&state.d, &state.cc)
+        case .DCR_E:
+            pc_delt = dcr(&state.e, &state.cc)
+        case .DCR_H:
+            pc_delt = dcr(&state.h, &state.cc)
+        case .DCR_L:
+            pc_delt = dcr(&state.l, &state.cc)
+        case .DCR_M:
+            offset := getM(state)
+            pc_delt = dcr(&state.memory[offset], &state.cc)
+        case .DCR_A:
+            pc_delt = dcr(&state.a, &state.cc)
         case .DCX_B:
             pc_delt = dcx(&state.b, &state.c)
         case .DCX_D:
@@ -721,6 +774,25 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .MOV_B_M:
             data := getM(state)
             pc_delt = mov(&state.b, &data)
+        case .MOV_B_A:
+            pc_delt = mov(&state.b, &state.a)
+        case .MOV_C_B:
+            pc_delt = mov(&state.c, &state.b)
+        case .MOV_C_C:
+            pc_delt = mov(&state.c, &state.c)
+        case .MOV_C_D:
+            pc_delt = mov(&state.c, &state.d)
+        case .MOV_C_E:
+            pc_delt = mov(&state.c, &state.e)
+        case .MOV_C_H:
+            pc_delt = mov(&state.c, &state.h)
+        case .MOV_C_L:
+            pc_delt = mov(&state.c, &state.l)
+        case .MOV_C_M:
+            data := getM(state)
+            pc_delt = mov(&state.c, &data)
+        case .MOV_C_A:
+            pc_delt = mov(&state.c, &state.a)
         case .MOV_D_B:
             pc_delt = mov(&state.d, &state.b)
         case .MOV_D_C:
@@ -875,6 +947,12 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = ret(state, true)
         case .RNC:
             pc_delt = ret(state, !state.cc.cy)
+        case .RC:
+            pc_delt = ret(state, state.cc.cy)
+        case .RNZ:
+            pc_delt = ret(state, !state.cc.z)
+        case .RZ:
+            pc_delt = ret(state, state.cc.z)
         case .EI:
             state.int_enable = true
             pc_delt = 1
@@ -924,10 +1002,39 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             state.cc.cy = bit != 0
             state.a = state.a | bit << 7
             pc_delt = 1
+        case .RLC:
+            bit := state.a & 128
+            state.a = state.a << 1
+            state.cc.cy = bit != 0
+            state.a = state.a | bit >> 7
         case .OUT:
             pc_delt = 2
         case .IN:
             pc_delt = 2
+        case .RST_0:
+            pc_delt = rst(state, 0)
+        case .RST_1:
+            pc_delt = rst(state, 1)
+        case .RST_2:
+            pc_delt = rst(state, 2)
+        case .RST_3:
+            pc_delt = rst(state, 3)
+        case .RST_4:
+            pc_delt = rst(state, 4)
+        case .RST_5:
+            pc_delt = rst(state, 5)
+        case .RST_6:
+            pc_delt = rst(state, 6)
+        case .RST_7:
+            pc_delt = rst(state, 7)
+        case .SUB_B:
+            pc_delt = sub(state.b, state)
+        case .SBB_M:
+            offset := getHL(state)
+            pc_delt = sub(state.memory[offset] + u8(state.cc.cy), state)
+        case .SUI:
+            value := state.memory[state.pc+1]
+            pc_delt = sub(value, state) + 1
         case:
             unimplementedInstruction(state)
     }
