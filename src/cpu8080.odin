@@ -523,6 +523,14 @@ get_low :: proc(value: u16) -> u8 {
     return out
 }
 
+@(private="file")
+getHighLow :: proc(value: u16) -> (u8, u8) {
+    high : u8 = auto_cast (value >> 8) & 0xff
+    low : u8 = auto_cast value & 0xff
+
+    return high, low
+}
+
 get_combined :: proc(high: u8, low: u8) -> u16 {
     return (u16(high) << 8) | u16(low)
 }
@@ -580,11 +588,20 @@ u8ToConditionCodes :: proc(value: u8, cc: ^ConditionCodes) {
     cc.s = value & 1 > 0
 }
 
+generateInterrupt :: proc(state: ^State8080, interrupt_num: int) {
+    high := get_high(u16(state.pc))
+    low := get_low(u16(state.pc))
+    pushR(high, low, state)
+    state.pc = 8 * interrupt_num
+}
+
 emuluate8080p :: proc(state: ^State8080) -> int {
     opcode : OpCode = auto_cast state.memory[state.pc]
     pc_delt : int = 0
 
-    disassemble8080p(state.memory, state.pc)
+    when DEBUG {
+        disassemble8080p(state.memory, state.pc)
+    }
 
     #partial switch opcode {
         case .NOP, .NOP2, .NOP3, .NOP4, .NOP5:
@@ -917,10 +934,11 @@ emuluate8080p :: proc(state: ^State8080) -> int {
 
     state.pc += pc_delt
     
-    printRegisters(state)
-    printConditionCodes(&state.cc)
-    fmt.printf("\n")
-
+    when DEBUG {
+        printRegisters(state)
+        printConditionCodes(&state.cc)
+        fmt.printf("\n")
+    }
 
     return 1
 }
