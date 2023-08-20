@@ -460,7 +460,7 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .CALL:
             return twoByteInstruction("CALL   ", code[2], code[1])
         case .ACI:
-            return byteInstruction("ACI", code[1])
+            return byteInstruction("ACI    ,#", code[1])
         case .RST_1:
             return simpleInstruction("RST    1")
         case .RNC:
@@ -486,13 +486,13 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .JC:
             return twoByteInstruction("JC     ", code[2], code[1])
         case .IN:
-            return byteInstruction("IN", code[1])
+            return byteInstruction("IN     ", code[1])
         case .CC:
             return twoByteInstruction("CC     ", code[2], code[1])
         case .NOP11:
             return simpleInstruction("NOP")
         case .SBI:
-            return byteInstruction("SBI", code[2])
+            return byteInstruction("SBI    ,#", code[2])
         case .RST_3:
             return simpleInstruction("RST 3")
         case .RPO:
@@ -500,11 +500,11 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .POP_H:
             return simpleInstruction("POP    H")
         case .JPO:
-            return twoByteInstruction("JPO", code[2], code[1])
+            return twoByteInstruction("JPO    ", code[2], code[1])
         case .XTHL:
             return simpleInstruction("XTHL")
         case .CPO:
-            return twoByteInstruction("CPO", code[2], code[1])
+            return twoByteInstruction("CPO    ", code[2], code[1])
         case .PUSH_H:
             return simpleInstruction("PUSH   H")
         case .ANI:
@@ -516,15 +516,15 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .PCHL:
             return simpleInstruction("PCHL")
         case .JPE:
-            return twoByteInstruction("JPE", code[2], code[1])
+            return twoByteInstruction("JPE    ", code[2], code[1])
         case .XCHG:
             return simpleInstruction("XCHG")
         case .CPE:
-            return twoByteInstruction("CPE", code[2], code[1])
+            return twoByteInstruction("CPE    ", code[2], code[1])
         case .NOP12:
             return simpleInstruction("NOP")
         case .XRI:
-            return byteInstruction("XRI", code[1])
+            return byteInstruction("XRI    ,#", code[1])
         case .RST_5:
             return simpleInstruction("RST    5")
         case .RP:
@@ -532,11 +532,11 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .POP_PSW:
             return simpleInstruction("POP    PSW")
         case .JP:
-            return twoByteInstruction("JP", code[2], code[1])
+            return twoByteInstruction("JP     ", code[2], code[1])
         case .DI:
             return simpleInstruction("DI")
         case .CP:
-            return twoByteInstruction("CP", code[2], code[1])
+            return twoByteInstruction("CP     ", code[2], code[1])
         case .PUSH_PSW:
             return simpleInstruction("PUSH   PSW")
         case .ORI:
@@ -548,11 +548,11 @@ disassemble8080p :: proc(codebuffer: []u8, pc: int) -> int {
         case .SPHL:
             return simpleInstruction("SPHL")
         case .JM:
-            return twoByteInstruction("JM", code[2], code[1])
+            return twoByteInstruction("JM     ", code[2], code[1])
         case .EI:
             return simpleInstruction("EI")
         case .CM:
-            return twoByteInstruction("CM", code[2], code[1])
+            return twoByteInstruction("CM     ", code[2], code[1])
         case .NOP13:
             return simpleInstruction("NOP")
         case .CPI:
