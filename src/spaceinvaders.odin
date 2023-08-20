@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:io"
 import "core:time"
+import "core:math"
 
 import rl "vendor:raylib"
 
@@ -13,11 +14,23 @@ CPU_DIAG :: #config(cpu_diag, false)
 SCREEN_WIDTH :: 222
 SCREEN_HEIGHT :: 256
 
+TIC :: 1000.0 / 60.0  // Milliseconds per tic (screen update)
+CYCLES_PER_MS :: 2000  // 8080 runs at 2 Mhz
+CYCLES_PER_TIC : f64 : CYCLES_PER_MS * TIC
+
 Shift :: struct {
     register : u16,
     offset : uint
 }
 
+SpaceInvadersMachine :: struct {
+    shift : Shift,
+    ports : [8]u8,
+    state : State8080,
+}
+
+// Variables to store information about the hardware specific ports read/written during
+// machineIn and machineOut
 shift : Shift
 ports : [8]u8
 
@@ -32,7 +45,6 @@ updateDisplay :: proc(data: []u8, scale: int) {
     for i in 0..<7168 {
         for j in 0..<8 {
             bit = data[i] & (1 << uint(j))
-            //bit = data[i] & (128 >> uint(j))
             if bit != 0 {
                 rl.DrawPixel(pix_x, pix_y, rl.WHITE)
             } else {
@@ -47,21 +59,6 @@ updateDisplay :: proc(data: []u8, scale: int) {
         }
         
     }
-    /*
-    color := rl.WHITE
-    for i in 0..<SCREEN_WIDTH {
-        if i % 10 == 0 {
-            if color == rl.WHITE {
-                color = rl.GREEN
-            } else {
-                color = rl.WHITE
-            }
-        }
-        for j in 0..<SCREEN_HEIGHT {
-            rl.DrawPixel(i32(i), i32(j), color)
-        }
-    }
-    */
 }
 
 machineIn :: proc(state: ^State8080, port: u8) {
@@ -69,6 +66,7 @@ machineIn :: proc(state: ^State8080, port: u8) {
     switch port {
         case 3:
             state.a = auto_cast (shift.register >> (8 - shift.offset)) & 0xff
+            fmt.println("SHIFT:", shift.offset, shift.register)
         case:
             state.a = ports[port]
     }
@@ -79,19 +77,127 @@ machineOut :: proc(state: ^State8080, port: u8) {
     switch port {
         case 2:
             shift.offset = auto_cast state.a & 0x7
+            fmt.println("SHIFT OFFSET:", shift.offset)
         case 4:
             shift.register = (u16(state.a) << 8) | (shift.register >> 8)
+            fmt.println("SHIFT REGISTER:", shift.register)
         case:
             ports[port] = state.a            
     }
 }
 
-runCycle :: proc(state: ^State8080, ncycle: int) {
-    tot_cycles: int = 0
-    if tot_cycles >= ncycle do return
+handleInput :: proc() {
+
+    // Insert coin
+    if rl.IsKeyPressed(rl.KeyboardKey.C) do ports[1] |= 1
+
+    // 1P start/movement
+    if rl.IsKeyPressed(rl.KeyboardKey.A) do ports[1] |= 1 << 5
+    if rl.IsKeyPressed(rl.KeyboardKey.D) do ports[1] |= 1 << 6
+    if rl.IsKeyPressed(rl.KeyboardKey.S) do ports[1] |= 1 << 2
+    if rl.IsKeyPressed(rl.KeyboardKey.UP) do ports[1] |= 1 << 4
+
+    // 2P start/movement
+    if rl.IsKeyPressed(rl.KeyboardKey.LEFT) do ports[2] |= 1 << 5
+    if rl.IsKeyPressed(rl.KeyboardKey.RIGHT) do ports[2] |= 1 << 6
+    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) do ports[2] |= 1 << 1
+    if rl.IsKeyPressed(rl.KeyboardKey.UP) do ports[2] |= 1 << 4
+
+    // When keys are releases, undo everything
+    if rl.IsKeyReleased(rl.KeyboardKey.C) do ports[1] |= 1
+
+    if rl.IsKeyReleased(rl.KeyboardKey.A) do ports[1] &~= 1 << 5
+    if rl.IsKeyReleased(rl.KeyboardKey.D) do ports[1] &~= 1 << 6
+    if rl.IsKeyReleased(rl.KeyboardKey.S) do ports[1] &~= 1 << 2
+    if rl.IsKeyReleased(rl.KeyboardKey.UP) do ports[1] &~= 1 << 4
+
+    if rl.IsKeyPressed(rl.KeyboardKey.LEFT) do ports[2] &~= 1 << 5
+    if rl.IsKeyPressed(rl.KeyboardKey.RIGHT) do ports[2] &~= 1 << 6
+    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) do ports[2] &~= 1 << 1
+    if rl.IsKeyPressed(rl.KeyboardKey.UP) do ports[2] &~= 1 << 4
+
+}
+
+runCycles :: proc(state: ^State8080, ncycles: int) {
+    tot_cycles := 0
+    cycle_opcode : int
+
+    for tot_cycles < ncycles {
+
+        when DEBUG {
+            //count += 1
+            //fmt.printf("%v ", count)
+        }
+
+        cycle_opcode = emuluate8080p(state)
+        tot_cycles += cycle_opcode
+    }
+
 }
 
 runSpaceInvaders :: proc() {
+    ports[0] = (1 << 1) | (1 << 2) | (1 << 3)
+    ports[1] = 0
+    ports[2] = 0
+
+    rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Space Invaders")
+    defer rl.CloseWindow()
+
+    rl.SetTargetFPS(60)
+
+    source, success := os.read_entire_file_from_filename("rom/invaders.concatenated")
+    state : State8080
+    state.memory = make([]u8, 8192*8)
+    state.sp = 0xf000
+    copy(state.memory, source)
+
+    vram := state.memory[0x2400:0x4000]
+    
+    fmt.println("Size of file:", len(source))
+    fmt.println("Size of memory:", len(state.memory))
+    count := 0
+
+    t_frame := time.now()
+    t_since : f64
+
+    shift.offset = 4
+    shift.register = 1
+
+    ncycles_half_tic : int = auto_cast math.floor(CYCLES_PER_TIC / 2)
+
+    for !rl.WindowShouldClose() {
+        t_since = time.duration_milliseconds(time.since(t_frame))
+
+        if t_since > TIC {
+            t_frame = time.now()
+
+            // Update the display
+            rl.BeginDrawing()
+            rl.ClearBackground(rl.WHITE)
+            updateDisplay(vram, 1)
+            rl.EndDrawing()
+
+            // Run half the cpu cycles in this tic
+            runCycles(&state, ncycles_half_tic)
+
+            // Generate mid frame interrupt
+            if state.int_enable do generateInterrupt(&state, 1)
+
+            // Run the rest of the cycles in this tic
+            runCycles(&state, ncycles_half_tic)
+
+            // Generate the end of frame interrupt
+            if state.int_enable do generateInterrupt(&state, 2)
+
+            handleInput()
+
+        }
+
+    }
+}
+
+/*
+runSpaceInvaders_old :: proc() {
     rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Space Invaders")
     defer rl.CloseWindow()
 
@@ -132,25 +238,14 @@ runSpaceInvaders :: proc() {
         }
 
         
-        if mid_scan_int && t_since > 1.0/30.0 {
+        if mid_scan_int && t_since > 0.5/60.0 {
             if state.int_enable {
                 generateInterrupt(&state, 1)
                 mid_scan_int = false
             }
         }
 
-        //opcode : OpCode = auto_cast state.memory[state.pc]
-        //if opcode == .IN {
-        //    port := state.memory[state.pc+1]
-        //    machineIn(&state, port)
-        //    state.pc += 2
-        //} else if opcode == .OUT {
-        //    port := state.memory[state.pc+1]
-        //    machineOut(&state, port)
-        //    state.pc += 2
-        //} else {
         emuluate8080p(&state)
-        //}
 
         if t_since > 1.0/60.0 {
             if state.int_enable {
@@ -163,6 +258,7 @@ runSpaceInvaders :: proc() {
     }
 
 }
+*/
 
 run8080test :: proc() {
     source, success := os.read_entire_file_from_filename("test/cpudiag.bin")
@@ -188,13 +284,6 @@ run8080test :: proc() {
     for {
         emuluate8080p(&state)
     }
-
-    /*
-    //Skip DAA test
-    state.memory[0x59c] = 0xc3
-    state.memory[0x59d] = 0xc2
-    state.memory[0x59e] = 0x05
-    */
 }
 
 main :: proc() {

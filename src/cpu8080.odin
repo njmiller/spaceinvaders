@@ -6,7 +6,9 @@ import "core:os"
 
 /*TODO: 1. Check for bit rotation stuff in core library for RRC, RLC, etc
         2. Use addition/subtraction stuff for carry in core.math.bits
-*/ 
+        3. Put each switch statement case into its own separated function that returns pc_delt and ncycles
+*/
+
 OpCode :: enum u8 {
     NOP = 0x00,
     LXI_B = 0x01,
@@ -432,15 +434,15 @@ cmp :: proc(value: u8, state: ^State8080) -> int {
 
 // Implement all the jump instructions. Since the differences are the
 // jump conditions, it is also passed in as an argument
-jump :: proc(state: ^State8080, cond: bool) -> int {
+jump :: proc(state: ^State8080, cond: bool) -> (int, int) {
     //pc_delt := 3
-    if !cond do return 3
+    if !cond do return 3, 10
     //if cond {
     offset := getImmediate(state)
     state.pc = auto_cast offset
     //pc_delt = 0
     //}
-    return 0
+    return 0, 10
 }
 
 mov :: proc(dest: ^u8, source: ^u8) -> int {
@@ -491,9 +493,9 @@ rst :: proc(state: ^State8080, num: int) -> int {
     return 0
 }
 
-call :: proc(state: ^State8080, cond: bool) -> int {
+call :: proc(state: ^State8080, cond: bool) -> (int, int) {
 
-    if !cond do return 3
+    if !cond do return 3, 11
 
     when CPU_DIAG {
         value := getImmediate(state)
@@ -511,7 +513,7 @@ call :: proc(state: ^State8080, cond: bool) -> int {
             } else if state.c == 2 { 
                 fmt.printf("print char routine called\n")
             }
-            return 3
+            return 3, 11
         } else if 0 == value {
             os.exit(20)
         }
@@ -522,12 +524,12 @@ call :: proc(state: ^State8080, cond: bool) -> int {
     state.memory[state.sp - 2] = get_low(retAddr)
     state.sp -= 2
     state.pc = auto_cast getImmediate(state)
-    return 0
+    return 0, 17
 }
 
-ret :: proc(state: ^State8080, cond: bool) -> int {
+ret :: proc(state: ^State8080, cond: bool) -> (int, int) {
 
-    if !cond do return 1
+    if !cond do return 1, 11
 
     low := state.memory[state.sp]
     high := state.memory[state.sp + 1]
@@ -544,7 +546,7 @@ ret :: proc(state: ^State8080, cond: bool) -> int {
     state.pc = auto_cast get_combined(high, low)
     state.sp += 2
 
-    return 0
+    return 0, 11
 }
 
 // Functions to push and pop values off the stack.
@@ -635,6 +637,7 @@ generateInterrupt :: proc(state: ^State8080, interrupt_num: int) {
 emuluate8080p :: proc(state: ^State8080) -> int {
     opcode : OpCode = auto_cast state.memory[state.pc]
     pc_delt : int = 0
+    ncycles : int = -1
 
     when DEBUG {
         disassemble8080p(state.memory, state.pc)
@@ -643,588 +646,810 @@ emuluate8080p :: proc(state: ^State8080) -> int {
     switch opcode {
         case .NOP, .NOP2, .NOP3, .NOP4, .NOP5, .NOP6, .NOP7, .NOP8, .NOP9, .NOP10, .NOP11, .NOP12, .NOP13:
             pc_delt = 1
+            ncycles = 4
         case .ANA_B:
             pc_delt = ana(state.b, state)
+            ncycles = 4
         case .ANA_C:
             pc_delt = ana(state.c, state)
+            ncycles = 4
         case .ANA_D:
             pc_delt = ana(state.d, state)
+            ncycles = 4
         case .ANA_E:
             pc_delt = ana(state.e, state)
+            ncycles = 4
         case .ANA_H:
             pc_delt = ana(state.h, state)
+            ncycles = 4
         case .ANA_L:
             pc_delt = ana(state.l, state)
+            ncycles = 4
         case .ANA_M:
             value := getM(state)
             pc_delt = ana(value, state)
+            ncycles = 7
         case .ANA_A:
             pc_delt = ana(state.a, state)
+            ncycles = 4
         case .ANI:
             data := state.memory[state.pc+1]
             pc_delt = ana(data, state) + 1
+            ncycles = 7
         case .XRA_B:
             pc_delt = xra(state.b, state)
+            ncycles = 4
         case .XRA_C:
             pc_delt = xra(state.c, state)
+            ncycles = 4
         case .XRA_D:
             pc_delt = xra(state.d, state)
+            ncycles = 4
         case .XRA_E:
             pc_delt = xra(state.e, state)
+            ncycles = 4
         case .XRA_H:
             pc_delt = xra(state.h, state)
+            ncycles = 4
         case .XRA_L:
             pc_delt = xra(state.l, state)
+            ncycles = 4
         case .XRA_M:
             value := getM(state)
             pc_delt = xra(value, state)
+            ncycles = 7
         case .XRA_A:
             pc_delt = xra(state.a, state)
+            ncycles = 4
         case .XRI:
             value := state.memory[state.pc+1]
             pc_delt = xra(value, state) + 1
+            ncycles = 7
         case .ORA_B:
             pc_delt = ora(state.b, state)
+            ncycles = 4
         case .ORA_C:
             pc_delt = ora(state.c, state)
+            ncycles = 4
         case .ORA_D:
             pc_delt = ora(state.d, state)
+            ncycles = 4
         case .ORA_E:
             pc_delt = ora(state.e, state)
+            ncycles = 4
         case .ORA_H:
             pc_delt = ora(state.h, state)
+            ncycles = 4
         case .ORA_L:
             pc_delt = ora(state.l, state)
+            ncycles = 4
         case .ORA_M:
             value := getM(state)
             pc_delt = ora(value, state)
+            ncycles = 7
         case .ORA_A:
             pc_delt = ora(state.a, state)
+            ncycles = 4
         case .ORI:
             value := state.memory[state.pc+1]
             pc_delt = ora(value, state) + 1
+            ncycles = 7
         case .INR_B:
             pc_delt = inr(&state.b, &state.cc)
+            ncycles = 5
         case .INR_C:
             pc_delt = inr(&state.c, &state.cc)
+            ncycles = 5
         case .INR_D:
             pc_delt = inr(&state.d, &state.cc)
+            ncycles = 5
         case .INR_E:
             pc_delt = inr(&state.e, &state.cc)
+            ncycles = 5
         case .INR_H:
             pc_delt = inr(&state.h, &state.cc)
+            ncycles = 5
         case .INR_L:
             pc_delt = inr(&state.l, &state.cc)
+            ncycles = 5
         case .INR_M:
             offset := getHL(state)
             pc_delt = inr(&state.memory[offset], &state.cc)
+            ncycles = 10
         case .INR_A:
             pc_delt = inr(&state.a, &state.cc)
+            ncycles = 5
         case .DCR_B:
             pc_delt = dcr(&state.b, &state.cc)
+            ncycles = 5
         case .DCR_C:
             pc_delt = dcr(&state.c, &state.cc)
+            ncycles = 5
         case .DCR_D:
             pc_delt = dcr(&state.d, &state.cc)
+            ncycles = 5
         case .DCR_E:
             pc_delt = dcr(&state.e, &state.cc)
+            ncycles = 5
         case .DCR_H:
             pc_delt = dcr(&state.h, &state.cc)
+            ncycles = 5
         case .DCR_L:
             pc_delt = dcr(&state.l, &state.cc)
+            ncycles = 5
         case .DCR_M:
             offset := getHL(state)
             pc_delt = dcr(&state.memory[offset], &state.cc)
+            ncycles = 10
         case .DCR_A:
             pc_delt = dcr(&state.a, &state.cc)
+            ncycles = 5
         case .DCX_B:
             pc_delt = dcx(&state.b, &state.c)
+            ncycles = 5
         case .DCX_D:
             pc_delt = dcx(&state.d, &state.e)
+            ncycles = 5
         case .DCX_H:
             pc_delt = dcx(&state.h, &state.l)
+            ncycles = 5
         case .DCX_SP:
             state.sp -= 1
             pc_delt = 1
+            ncycles = 5
         case .INX_B:
             pc_delt = inx(&state.b, &state.c)
+            ncycles = 5
         case .INX_D:
             pc_delt = inx(&state.d, &state.e)
+            ncycles = 5
         case .INX_H:
             pc_delt = inx(&state.h, &state.l)
+            ncycles = 5
         case .INX_SP:
             state.sp += 1
             pc_delt = 1
+            ncycles = 5
         case .LDAX_B:
             offset := getBC(state)
             state.a = state.memory[offset]
             pc_delt = 1
+            ncycles = 7
         case .LDAX_D:
             offset := getDE(state)
             state.a = state.memory[offset]
             pc_delt = 1
+            ncycles = 7
         case .LDA:
             offset := getImmediate(state)
             state.a = state.memory[offset]
             pc_delt = 3
+            ncycles = 13
         case .LXI_B:
             pc_delt = lxi(&state.b, &state.c, state.memory[state.pc+1:state.pc+3])
+            ncycles = 10
         case .LXI_D:
             pc_delt = lxi(&state.d, &state.e, state.memory[state.pc+1:state.pc+3])
+            ncycles = 10
         case .LXI_H:
             pc_delt = lxi(&state.h, &state.l, state.memory[state.pc+1:state.pc+3])
+            ncycles = 10
         case .LXI_SP:
             data := getImmediate(state)
             state.sp = data
             pc_delt = 3
+            ncycles = 10
         case .MVI_B:
             pc_delt = mov(&state.b, &state.memory[state.pc+1]) + 1
+            ncycles = 7
         case .MVI_C:
             pc_delt = mov(&state.c, &state.memory[state.pc+1]) + 1
+            ncycles = 7
         case .MVI_D:
             pc_delt = mov(&state.d, &state.memory[state.pc+1]) + 1
+            ncycles = 7
         case .MVI_E:
             pc_delt = mov(&state.e, &state.memory[state.pc+1]) + 1
+            ncycles = 7
         case .MVI_H:
             pc_delt = mov(&state.h, &state.memory[state.pc+1]) + 1
+            ncycles = 7
         case .MVI_L:
             pc_delt = mov(&state.l, &state.memory[state.pc+1]) + 1
+            ncycles = 7
         case .MVI_M:
             setM(state.memory[state.pc+1], state)
             pc_delt = 2
+            ncycles = 10
         case .MVI_A:
             pc_delt = mov(&state.a, &state.memory[state.pc+1]) + 1
+            ncycles = 7
         case .STAX_B:
             pc_delt = stax(state.b, state.c, state)
+            ncycles = 7
         case .STAX_D:
             pc_delt = stax(state.d, state.e, state)
+            ncycles = 7
         case .STA:
             offset := getImmediate(state)
             state.memory[offset] = state.a
             pc_delt = 3
+            ncycles = 13
         case .MOV_B_B:
             pc_delt = mov(&state.b, &state.b)
+            ncycles = 5
         case .MOV_B_C:
             pc_delt = mov(&state.b, &state.c)
+            ncycles = 5
         case .MOV_B_D:
             pc_delt = mov(&state.b, &state.d)
+            ncycles = 5
         case .MOV_B_E:
             pc_delt = mov(&state.b, &state.e)
+            ncycles = 5
         case .MOV_B_H:
             pc_delt = mov(&state.b, &state.h)
+            ncycles = 5
         case .MOV_B_L:
             pc_delt = mov(&state.b, &state.l)
+            ncycles = 5
         case .MOV_B_M:
             data := getM(state)
             pc_delt = mov(&state.b, &data)
+            ncycles = 7
         case .MOV_B_A:
             pc_delt = mov(&state.b, &state.a)
+            ncycles = 5
         case .MOV_C_B:
             pc_delt = mov(&state.c, &state.b)
+            ncycles = 5
         case .MOV_C_C:
             pc_delt = mov(&state.c, &state.c)
+            ncycles = 5
         case .MOV_C_D:
             pc_delt = mov(&state.c, &state.d)
+            ncycles = 5
         case .MOV_C_E:
             pc_delt = mov(&state.c, &state.e)
+            ncycles = 5
         case .MOV_C_H:
             pc_delt = mov(&state.c, &state.h)
+            ncycles = 5
         case .MOV_C_L:
             pc_delt = mov(&state.c, &state.l)
+            ncycles = 5
         case .MOV_C_M:
             data := getM(state)
             pc_delt = mov(&state.c, &data)
+            ncycles = 7
         case .MOV_C_A:
             pc_delt = mov(&state.c, &state.a)
+            ncycles = 5
         case .MOV_D_B:
             pc_delt = mov(&state.d, &state.b)
+            ncycles = 5
         case .MOV_D_C:
             pc_delt = mov(&state.d, &state.c)
+            ncycles = 5
         case .MOV_D_D:
             pc_delt = mov(&state.d, &state.d)
+            ncycles = 5
         case .MOV_D_E:
             pc_delt = mov(&state.d, &state.e)
+            ncycles = 5
         case .MOV_D_H:
             pc_delt = mov(&state.d, &state.h)
+            ncycles = 5
         case .MOV_D_L:
             pc_delt = mov(&state.d, &state.l)
+            ncycles = 5
         case .MOV_D_M:
             data := getM(state)
             pc_delt = mov(&state.d, &data)
+            ncycles = 7
         case .MOV_D_A:
             pc_delt = mov(&state.d, &state.a)
+            ncycles = 5
         case .MOV_E_B:
             pc_delt = mov(&state.e, &state.b)
+            ncycles = 5
         case .MOV_E_C:
             pc_delt = mov(&state.e, &state.c)
+            ncycles = 5
         case .MOV_E_D:
             pc_delt = mov(&state.e, &state.d)
+            ncycles = 5
         case .MOV_E_E:
             pc_delt = mov(&state.e, &state.e)
+            ncycles = 5
         case .MOV_E_H:
             pc_delt = mov(&state.e, &state.h)
+            ncycles = 5
         case .MOV_E_L:
             pc_delt = mov(&state.e, &state.l)
+            ncycles = 5
         case .MOV_E_M:
             data := getM(state)
             pc_delt = mov(&state.e, &data)
+            ncycles = 7
         case .MOV_E_A:
             pc_delt = mov(&state.e, &state.a)
+            ncycles = 5
         case .MOV_H_B:
             pc_delt = mov(&state.h, &state.b)
+            ncycles = 5
         case .MOV_H_C:
             pc_delt = mov(&state.h, &state.c)
+            ncycles = 5
         case .MOV_H_D:
             pc_delt = mov(&state.h, &state.d)
+            ncycles = 5
         case .MOV_H_E:
             pc_delt = mov(&state.h, &state.e)
+            ncycles = 5
         case .MOV_H_H:
             pc_delt = mov(&state.h, &state.h)
+            ncycles = 5
         case .MOV_H_L:
             pc_delt = mov(&state.h, &state.l)
+            ncycles = 5
         case .MOV_H_M:
             data := getM(state)
             pc_delt = mov(&state.h, &data)
+            ncycles = 7
         case .MOV_H_A:
             pc_delt = mov(&state.h, &state.a)
+            ncycles = 5
         case .MOV_L_B:
             pc_delt = mov(&state.l, &state.b)
+            ncycles = 5
         case .MOV_L_C:
             pc_delt = mov(&state.l, &state.c)
+            ncycles = 5
         case .MOV_L_D:
             pc_delt = mov(&state.l, &state.d)
+            ncycles = 5
         case .MOV_L_E:
             pc_delt = mov(&state.l, &state.e)
+            ncycles = 5
         case .MOV_L_H:
             pc_delt = mov(&state.l, &state.h)
+            ncycles = 5
         case .MOV_L_L:
             pc_delt = mov(&state.l, &state.l)
+            ncycles = 5
         case .MOV_L_M:
             data := getM(state)
             pc_delt = mov(&state.l, &data)
+            ncycles = 7
         case .MOV_L_A:
             pc_delt = mov(&state.l, &state.a)
+            ncycles = 5
         case .MOV_M_B:
             setM(state.b, state)
             pc_delt = 1
+            ncycles = 7
         case .MOV_M_C:
             setM(state.c, state)
             pc_delt = 1
+            ncycles = 7
         case .MOV_M_D:
             setM(state.d, state)
             pc_delt = 1
+            ncycles = 7
         case .MOV_M_E:
             setM(state.e, state)
             pc_delt = 1
+            ncycles = 7
         case .MOV_M_H:
             setM(state.h, state)
             pc_delt = 1
+            ncycles = 7
         case .MOV_M_L:
             setM(state.l, state)
             pc_delt = 1
+            ncycles = 7
         case .MOV_M_A:
             setM(state.a, state)
             pc_delt = 1
+            ncycles = 7
             //TODO: Should I rewrite getM to be able to do this.
             //Currently getM returns a copy of the data and not a pointer
             //data := getM(state)
             //pc_delt = mov(&data, &state.a)
         case .MOV_A_B:
             pc_delt = mov(&state.a, &state.b)
+            ncycles = 5
         case .MOV_A_C:
             pc_delt = mov(&state.a, &state.c)
+            ncycles = 5
         case .MOV_A_D:
             pc_delt = mov(&state.a, &state.d)
+            ncycles = 5
         case .MOV_A_E:
             pc_delt = mov(&state.a, &state.e)
+            ncycles = 5
         case .MOV_A_H:
             pc_delt = mov(&state.a, &state.h)
+            ncycles = 5
         case .MOV_A_L:
             pc_delt = mov(&state.a, &state.l)
+            ncycles = 5
         case .MOV_A_M:
             data := getM(state)
             pc_delt = mov(&state.a, &data)
+            ncycles = 7
         case .MOV_A_A:
             pc_delt = mov(&state.a, &state.a)
+            ncycles = 5
         case .ADD_B:
             pc_delt = add(state.b, state)
+            ncycles = 4
         case .ADD_C:
             pc_delt = add(state.c, state)
+            ncycles = 4
         case .ADD_D:
             pc_delt = add(state.d, state)
+            ncycles = 4
         case .ADD_E:
             pc_delt = add(state.e, state)
+            ncycles = 4
         case .ADD_H:
             pc_delt = add(state.h, state)
+            ncycles = 4
         case .ADD_L:
             pc_delt = add(state.l, state)
+            ncycles = 4
         case .ADD_M:
             data := getM(state)
             pc_delt = add(data, state)
+            ncycles = 7
         case .ADD_A:
             pc_delt = add(state.a, state)
+            ncycles = 4
         case .ADC_B:
             pc_delt = add(state.b + u8(state.cc.cy), state)
+            ncycles = 4
         case .ADC_C:
             pc_delt = add(state.c + u8(state.cc.cy), state)
+            ncycles = 4
         case .ADC_D:
             pc_delt = add(state.d + u8(state.cc.cy), state)
+            ncycles = 4
         case .ADC_E:
             pc_delt = add(state.e + u8(state.cc.cy), state)
+            ncycles = 4
         case .ADC_H:
             pc_delt = add(state.h + u8(state.cc.cy), state)
+            ncycles = 4
         case .ADC_L:
             pc_delt = add(state.l + u8(state.cc.cy), state)
+            ncycles = 4
         case .ADC_M:
             value := getM(state) + u8(state.cc.cy)
             pc_delt = add(value, state)
+            ncycles = 7
         case .ADC_A:
             pc_delt = add(state.a + u8(state.cc.cy), state)
+            ncycles = 4
         case .ADI:
             data := state.memory[state.pc+1]
             pc_delt = add(data, state) + 1
+            ncycles = 7
         case .ACI:
             data := state.memory[state.pc+1] + u8(state.cc.cy)
             pc_delt = add(data, state) + 1
+            ncycles = 7
         case .SHLD:
             offset := getImmediate(state)
             state.memory[offset] = state.l
             state.memory[offset+1] = state.h
             pc_delt = 3
+            ncycles = 16
         case .LHLD:
             offset := getImmediate(state)
             state.l = state.memory[offset]
             state.h = state.memory[offset+1]
             pc_delt = 3
+            ncycles = 16
         case .JMP:
-            pc_delt = jump(state, true)
+            pc_delt, ncycles = jump(state, true)
         case .JC:
-            pc_delt = jump(state, state.cc.cy)
+            pc_delt, ncycles = jump(state, state.cc.cy)
         case .JNC:
-            pc_delt = jump(state, !state.cc.cy)
+            pc_delt, ncycles = jump(state, !state.cc.cy)
         case .JNZ:
-            pc_delt = jump(state, !state.cc.z)
+            pc_delt, ncycles = jump(state, !state.cc.z)
         case .JZ:
-            pc_delt = jump(state, state.cc.z)
+            pc_delt, ncycles = jump(state, state.cc.z)
         case .JPE:
-            pc_delt = jump(state, state.cc.p)
+            pc_delt, ncycles = jump(state, state.cc.p)
         case .JPO:
-            pc_delt = jump(state, !state.cc.p)
+            pc_delt, ncycles = jump(state, !state.cc.p)
         case .JP:
-            pc_delt = jump(state, !state.cc.s)
+            pc_delt, ncycles = jump(state, !state.cc.s)
         case .JM:
-            pc_delt = jump(state, state.cc.s)
+            pc_delt, ncycles = jump(state, state.cc.s)
         case .STC:
             state.cc.cy = true
             pc_delt = 1
+            ncycles = 4
         case .CMC:
             state.cc.cy = !state.cc.cy
             pc_delt = 1
+            ncycles = 4
         case .CMA:
             state.a = ~state.a
             pc_delt = 1
+            ncycles = 4
         case .CALL:
-            pc_delt = call(state, true)
+            pc_delt, ncycles = call(state, true)
         case .CC:
-            pc_delt = call(state, state.cc.cy)
+            pc_delt, ncycles = call(state, state.cc.cy)
         case .CNC:
-            pc_delt = call(state, !state.cc.cy)
+            pc_delt, ncycles = call(state, !state.cc.cy)
         case .CNZ:
-            pc_delt = call(state, !state.cc.z)
+            pc_delt, ncycles = call(state, !state.cc.z)
         case .CZ:
-            pc_delt = call(state, state.cc.z)
+            pc_delt, ncycles = call(state, state.cc.z)
         case .CPO:
-            pc_delt = call(state, !state.cc.p)
+            pc_delt, ncycles = call(state, !state.cc.p)
         case .CPE:
-            pc_delt = call(state, state.cc.p)
+            pc_delt, ncycles = call(state, state.cc.p)
         case .CP:
-            pc_delt = call(state, !state.cc.s)
+            pc_delt, ncycles = call(state, !state.cc.s)
         case .CM:
-            pc_delt = call(state, state.cc.s)
+            pc_delt, ncycles = call(state, state.cc.s)
         case .RET:
-            pc_delt = ret(state, true)
+            pc_delt, ncycles= ret(state, true)
+            ncycles = 10 //10 instead of 11 for RET compared to conditional returns
         case .RNC:
-            pc_delt = ret(state, !state.cc.cy)
+            pc_delt, ncycles = ret(state, !state.cc.cy)
         case .RC:
-            pc_delt = ret(state, state.cc.cy)
+            pc_delt, ncycles = ret(state, state.cc.cy)
         case .RNZ:
-            pc_delt = ret(state, !state.cc.z)
+            pc_delt, ncycles = ret(state, !state.cc.z)
         case .RZ:
-            pc_delt = ret(state, state.cc.z)
+            pc_delt, ncycles = ret(state, state.cc.z)
         case .RPE:
-            pc_delt = ret(state, state.cc.p)
+            pc_delt, ncycles = ret(state, state.cc.p)
         case .RPO:
-            pc_delt = ret(state, !state.cc.p)
+            pc_delt, ncycles = ret(state, !state.cc.p)
         case .RP:
-            pc_delt = ret(state, !state.cc.s)
+            pc_delt, ncycles = ret(state, !state.cc.s)
         case .RM:
-            pc_delt = ret(state, state.cc.s)
+            pc_delt, ncycles = ret(state, state.cc.s)
         case .EI:
             state.int_enable = true
             pc_delt = 1
+            ncycles = 4
         case .DI:
             state.int_enable = false
             pc_delt = 1
+            ncycles = 4
         case .PUSH_B:
             pc_delt = pushR(state.b, state.c, state)
+            ncycles = 11
         case .PUSH_D:
             pc_delt = pushR(state.d, state.e, state)
+            ncycles = 11
         case .PUSH_H:
             pc_delt = pushR(state.h, state.l, state)
+            ncycles = 11
         case .PUSH_PSW:
             ccInt := conditionCodesToU8(&state.cc)
             pc_delt = pushR(state.a, ccInt, state)
+            ncycles = 11
         case .POP_B:
             pc_delt = popR(&state.b, &state.c, state)
+            ncycles = 10
         case .POP_D:
             pc_delt = popR(&state.d, &state.e, state)
+            ncycles = 10
         case .POP_H:
             pc_delt = popR(&state.h, &state.l, state)
+            ncycles = 10
         case .POP_PSW:
             ccInt : u8
             pc_delt = popR(&state.a, &ccInt, state)
             u8ToConditionCodes(ccInt, &state.cc)
+            ncycles = 10
         case .CMP_B:
             pc_delt = cmp(state.b, state)
+            ncycles = 4
         case .CMP_C:
             pc_delt = cmp(state.c, state)
+            ncycles = 4
         case .CMP_D:
             pc_delt = cmp(state.d, state)
+            ncycles = 4
         case .CMP_E:
             pc_delt = cmp(state.e, state)
+            ncycles = 4
         case .CMP_H:
             pc_delt = cmp(state.h, state)
+            ncycles = 4
         case .CMP_L:
             pc_delt = cmp(state.l, state)
+            ncycles = 4
         case .CMP_M:
             value := getM(state)
             pc_delt = cmp(value, state)
+            ncycles = 7
         case .CMP_A:
             pc_delt = cmp(state.a, state)
+            ncycles = 4
         case .CPI:
             value := state.memory[state.pc+1]
             pc_delt = cmp(value, state) + 1
+            ncycles = 7
         case .DAD_B:
             pc_delt = dad(get_combined(state.b, state.c), state)
+            ncycles = 10
         case .DAD_D:
             pc_delt = dad(get_combined(state.d, state.e), state)
+            ncycles = 10
         case .DAD_H:
             pc_delt = dad(get_combined(state.h, state.l), state)
+            ncycles = 10
         case .DAD_SP:
             pc_delt = dad(state.sp, state)
+            ncycles = 10
         case .XCHG:
             state.h, state.d = state.d, state.h
             state.l, state.e = state.e, state.l
             pc_delt = 1
+            ncycles = 4
         case .XTHL:
             state.h, state.memory[state.sp+1] = state.memory[state.sp+1], state.h
             state.l, state.memory[state.sp] = state.memory[state.sp], state.l
             pc_delt = 1
+            ncycles = 18
         case .SPHL:
             state.sp = getHL(state)
             pc_delt = 1
+            ncycles = 5
         case .PCHL:
             state.pc = auto_cast getHL(state)
             pc_delt = 0
+            ncycles = 5
         case .RRC:
             bit := state.a & 0x1
             state.a = state.a >> 1
             state.cc.cy = bit != 0
             state.a = state.a | bit << 7
             pc_delt = 1
+            ncycles = 4
         case .RLC:
             bit := state.a & 128
             state.a = state.a << 1
             state.cc.cy = bit != 0
             state.a = state.a | bit >> 7
             pc_delt = 1
+            ncycles = 4
         case .RAL:
             bit := state.a & 128
             state.a = state.a << 1 | u8(state.cc.cy)
             state.cc.cy = bit != 0
             pc_delt = 1
+            ncycles = 4
         case .RAR:
             bit := state.a & 1
             state.a = state.a >> 1 | (u8(state.cc.cy) << 7)
             state.cc.cy = bit != 0
             pc_delt = 1
+            ncycles = 4
         case .OUT:
             // This should be implemented by the machine and not the CPU
             machineIn(state, state.memory[state.pc+1])
             pc_delt = 2
+            ncycles = 10
         case .IN:
             // This should be implemented by the machine and not the CPU
             machineOut(state, state.memory[state.pc+1])
             pc_delt = 2
+            ncycles = 10
         case .RST_0:
             pc_delt = rst(state, 0)
+            ncycles = 11
         case .RST_1:
             pc_delt = rst(state, 1)
+            ncycles = 11
         case .RST_2:
             pc_delt = rst(state, 2)
+            ncycles = 11
         case .RST_3:
             pc_delt = rst(state, 3)
+            ncycles = 11
         case .RST_4:
             pc_delt = rst(state, 4)
+            ncycles = 11
         case .RST_5:
             pc_delt = rst(state, 5)
+            ncycles = 11
         case .RST_6:
             pc_delt = rst(state, 6)
+            ncycles = 11
         case .RST_7:
             pc_delt = rst(state, 7)
+            ncycles = 11
         case .SUB_B:
             pc_delt = sub(state.b, state)
+            ncycles = 4
         case .SUB_C:
             pc_delt = sub(state.c, state)
+            ncycles = 4
         case .SUB_D:
             pc_delt = sub(state.d, state)
+            ncycles = 4
         case .SUB_E:
             pc_delt = sub(state.e, state)
+            ncycles = 4
         case .SUB_H:
             pc_delt = sub(state.h, state)
+            ncycles = 4
         case .SUB_L:
             pc_delt = sub(state.l, state)
+            ncycles = 4
         case .SUB_M:
             value := getM(state)
             pc_delt = sub(value, state)
+            ncycles = 7
         case .SUB_A:
             pc_delt = sub(state.a, state)
+            ncycles = 4
         case .SBB_B:
             pc_delt = sub(state.b + u8(state.cc.cy), state)
+            ncycles = 4
         case .SBB_C:
             pc_delt = sub(state.c + u8(state.cc.cy), state)
+            ncycles = 4
         case .SBB_D:
             pc_delt = sub(state.d + u8(state.cc.cy), state)
+            ncycles = 4
         case .SBB_E:
             pc_delt = sub(state.e + u8(state.cc.cy), state)
+            ncycles = 4
         case .SBB_H:
             pc_delt = sub(state.h + u8(state.cc.cy), state)
+            ncycles = 4
         case .SBB_L:
             pc_delt = sub(state.l + u8(state.cc.cy), state)
+            ncycles = 4
         case .SBB_M:
             value := getM(state) + u8(state.cc.cy)
             pc_delt = sub(value, state)
+            ncycles = 7
         case .SBB_A:
             pc_delt = sub(state.a + u8(state.cc.cy), state)
+            ncycles = 4
         case .SUI:
             value := state.memory[state.pc+1]
             pc_delt = sub(value, state) + 1
+            ncycles = 7
         case .SBI:
             value := state.memory[state.pc+1] + u8(state.cc.cy)
             pc_delt = sub(value, state) + 1
+            ncycles = 7
         case .DAA:
             unimplementedInstruction(state)
         case .HLT:
             unimplementedInstruction(state)
     }
 
+    if ncycles == -1 {
+        fmt.printf("Ncycles not implemented for instruction.")
+        disassemble8080p(state.memory, state.pc)
+        os.exit(10)
+    }
+
     state.pc += pc_delt
-    
+
     when DEBUG {
         printRegisters(state)
         printConditionCodes(&state.cc)
         fmt.printf("\n")
     }
 
-    return 1
+    return ncycles
 }
