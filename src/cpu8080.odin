@@ -1341,12 +1341,12 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             ncycles = 4
         case .OUT:
             // This should be implemented by the machine and not the CPU
-            machineIn(state, state.memory[state.pc+1])
+            machineOut(state, state.memory[state.pc+1])
             pc_delt = 2
             ncycles = 10
         case .IN:
             // This should be implemented by the machine and not the CPU
-            machineOut(state, state.memory[state.pc+1])
+            machineIn(state, state.memory[state.pc+1])
             pc_delt = 2
             ncycles = 10
         case .RST_0:

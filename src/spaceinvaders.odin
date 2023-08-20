@@ -39,8 +39,6 @@ updateDisplay :: proc(data: []u8, scale: int) {
     pix_x : i32 = 0
     pix_y : i32 = SCREEN_HEIGHT - 1
 
-    //fmt.println("DATA:", data)
-
     bit : u8
     for i in 0..<7168 {
         for j in 0..<8 {
@@ -66,7 +64,7 @@ machineIn :: proc(state: ^State8080, port: u8) {
     switch port {
         case 3:
             state.a = auto_cast (shift.register >> (8 - shift.offset)) & 0xff
-            fmt.println("SHIFT:", shift.offset, shift.register)
+            //fmt.println("SHIFT:", shift.offset, shift.register)
         case:
             state.a = ports[port]
     }
@@ -77,10 +75,10 @@ machineOut :: proc(state: ^State8080, port: u8) {
     switch port {
         case 2:
             shift.offset = auto_cast state.a & 0x7
-            fmt.println("SHIFT OFFSET:", shift.offset)
+            //fmt.println("SHIFT OFFSET OUT:", shift.offset)
         case 4:
             shift.register = (u16(state.a) << 8) | (shift.register >> 8)
-            fmt.println("SHIFT REGISTER:", shift.register)
+            //fmt.println("SHIFT REGISTER OUT:", shift.register)
         case:
             ports[port] = state.a            
     }
@@ -130,15 +128,32 @@ runCycles :: proc(state: ^State8080, ncycles: int) {
         }
 
         cycle_opcode = emuluate8080p(state)
+
+        /*
+        opcode : OpCode = auto_cast hardware.state.memory[state.pc]
+        if opcode == .IN {
+            machineIn(hardware, hardware.state.memory[state.pc+1])
+            hardware.state.pc += 2
+            cycle_opcode = 10
+        } else if opcode == .OUT {
+            machineOut(hardware, hardware.state.memory[state.pc+1])
+            hardware.state.pc += 2
+            cycle_opcode = 10
+        } else {
+            cycle_opcode = emulate8080p(hardware.state)
+        }
+        */
         tot_cycles += cycle_opcode
     }
 
 }
 
 runSpaceInvaders :: proc() {
+    siMachine : SpaceInvadersMachine
+
     ports[0] = (1 << 1) | (1 << 2) | (1 << 3)
     ports[1] = 0
-    ports[2] = 0
+    ports[2] = (1 << 0) | (1 << 1)
 
     rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Space Invaders")
     defer rl.CloseWindow()
@@ -160,8 +175,9 @@ runSpaceInvaders :: proc() {
     t_frame := time.now()
     t_since : f64
 
-    shift.offset = 4
-    shift.register = 1
+    siMachine.ports = ports
+    siMachine.shift = shift
+    //siMachine.state = state
 
     ncycles_half_tic : int = auto_cast math.floor(CYCLES_PER_TIC / 2)
 
@@ -196,69 +212,6 @@ runSpaceInvaders :: proc() {
     }
 }
 
-/*
-runSpaceInvaders_old :: proc() {
-    rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Space Invaders")
-    defer rl.CloseWindow()
-
-    rl.SetTargetFPS(60)
-
-    source, success := os.read_entire_file_from_filename("rom/invaders.concatenated")
-    state : State8080
-    state.memory = make([]u8, 8192*8)
-    state.sp = 0xf000
-    copy(state.memory, source)
-
-    vram := state.memory[0x2400:0x4000]
-    
-    fmt.println("Size of file:", len(source))
-    fmt.println("Size of memory:", len(state.memory))
-    count := 0
-
-    t_display_updated := time.now()
-    t_interrupt := time.now()
-    t_since : f64
-    mid_scan_int := true
-
-    for !rl.WindowShouldClose() {
-        t_since = time.duration_seconds((time.since(t_interrupt)))
-
-        // Update the display at 60 Hz
-        if time.duration_seconds(time.since(t_display_updated)) > 1.0/60.0 {
-            rl.BeginDrawing()
-            rl.ClearBackground(rl.WHITE)
-            updateDisplay(vram, 1)
-            rl.EndDrawing()
-            t_display_updated = time.now()
-        }
-
-        count += 1
-        when DEBUG {
-            fmt.printf("%v ", count)
-        }
-
-        
-        if mid_scan_int && t_since > 0.5/60.0 {
-            if state.int_enable {
-                generateInterrupt(&state, 1)
-                mid_scan_int = false
-            }
-        }
-
-        emuluate8080p(&state)
-
-        if t_since > 1.0/60.0 {
-            if state.int_enable {
-                generateInterrupt(&state, 2)
-                t_interrupt = time.now()
-                mid_scan_int = true
-            }
-        }
-
-    }
-
-}
-*/
 
 run8080test :: proc() {
     source, success := os.read_entire_file_from_filename("test/cpudiag.bin")
