@@ -587,34 +587,16 @@ get_combined :: proc(high: u8, low: u8) -> u16 {
     return (u16(high) << 8) | u16(low)
 }
 
-setBC :: proc(state: ^State8080, value: u16) {
-    state.b = get_high(value)
-    state.c = get_low(value)
-}
-
-setDE :: proc(state: ^State8080, value: u16) {
-    state.d = get_high(value)
-    state.e = get_low(value)
-}
-
-setHL :: proc(state: ^State8080, value: u16) {
-    state.h = get_high(value)
-    state.l = get_low(value)
-}
+setBC :: proc(state: ^State8080, value: u16) { state.b, state.c = getHighLow(value) }
+setDE :: proc(state: ^State8080, value: u16) { state.d, state.e = getHighLow(value) }
+setHL :: proc(state: ^State8080, value: u16) { state.h, state.l = getHighLow(value) }
+setM :: proc(value: u8, state: ^State8080) { state.memory[getHL(state)] = value }
 
 getBC :: proc(state: ^State8080) -> u16 { return get_combined(state.b, state.c) }
 getDE :: proc(state: ^State8080) -> u16 { return get_combined(state.d, state.e) }
 getHL :: proc(state: ^State8080) -> u16 { return get_combined(state.h, state.l) }
+getM :: proc(state: ^State8080) -> u8 { return state.memory[getHL(state)] }
 
-getM :: proc(state: ^State8080) -> u8 {
-    offset := getHL(state)
-    return state.memory[offset]
-}
-
-setM :: proc(value: u8, state: ^State8080) {
-    offset := getHL(state)
-    state.memory[offset] = value
-}
 
 getImmediate :: proc(state: ^State8080) -> u16 {
     return get_combined(state.memory[state.pc+2], state.memory[state.pc+1])
@@ -641,10 +623,13 @@ u8ToConditionCodes :: proc(value: u8, cc: ^ConditionCodes) {
 }
 
 generateInterrupt :: proc(state: ^State8080, interrupt_num: int) {
-    high := get_high(u16(state.pc))
-    low := get_low(u16(state.pc))
+    //high := get_high(u16(state.pc))
+    //low := get_low(u16(state.pc))
+    high, low := getHighLow(u16(state.pc))
+    //fmt.println("INTERRUPT:", state.pc)
     pushR(high, low, state)
     state.pc = 8 * interrupt_num
+    state.int_enable = false
 }
 
 emuluate8080p :: proc(state: ^State8080) -> int {
@@ -731,7 +716,7 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .INR_L:
             pc_delt = inr(&state.l, &state.cc)
         case .INR_M:
-            offset := getM(state)
+            offset := getHL(state)
             pc_delt = inr(&state.memory[offset], &state.cc)
         case .INR_A:
             pc_delt = inr(&state.a, &state.cc)
@@ -748,7 +733,7 @@ emuluate8080p :: proc(state: ^State8080) -> int {
         case .DCR_L:
             pc_delt = dcr(&state.l, &state.cc)
         case .DCR_M:
-            offset := getM(state)
+            offset := getHL(state)
             pc_delt = dcr(&state.memory[offset], &state.cc)
         case .DCR_A:
             pc_delt = dcr(&state.a, &state.cc)

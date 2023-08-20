@@ -10,11 +10,6 @@ import rl "vendor:raylib"
 DEBUG :: ODIN_DEBUG
 CPU_DIAG :: #config(cpu_diag, false)
 
-//SCREEN_WIDTH :: 800
-//SCREEN_HEIGHT :: 450
-
-//SCREEN_WIDTH :: 256
-//SCREEN_HEIGHT :: 224
 SCREEN_WIDTH :: 222
 SCREEN_HEIGHT :: 256
 
@@ -24,6 +19,7 @@ Shift :: struct {
 }
 
 shift : Shift
+ports : [8]u8
 
 updateDisplay :: proc(data: []u8, scale: int) {
 
@@ -69,21 +65,30 @@ updateDisplay :: proc(data: []u8, scale: int) {
 }
 
 machineIn :: proc(state: ^State8080, port: u8) {
-    fmt.println("MACHINE IN:", port)
+    //fmt.println("MACHINE IN:", port)
     switch port {
         case 3:
             state.a = auto_cast (shift.register >> (8 - shift.offset)) & 0xff
+        case:
+            state.a = ports[port]
     }
 }
 
 machineOut :: proc(state: ^State8080, port: u8) {
-    fmt.println("MACHINE OUT:", port)
+    //fmt.println("MACHINE OUT:", port)
     switch port {
         case 2:
             shift.offset = auto_cast state.a & 0x7
         case 4:
             shift.register = (u16(state.a) << 8) | (shift.register >> 8)
+        case:
+            ports[port] = state.a            
     }
+}
+
+runCycle :: proc(state: ^State8080, ncycle: int) {
+    tot_cycles: int = 0
+    if tot_cycles >= ncycle do return
 }
 
 runSpaceInvaders :: proc() {
@@ -106,8 +111,11 @@ runSpaceInvaders :: proc() {
 
     t_display_updated := time.now()
     t_interrupt := time.now()
+    t_since : f64
+    mid_scan_int := true
 
     for !rl.WindowShouldClose() {
+        t_since = time.duration_seconds((time.since(t_interrupt)))
 
         // Update the display at 60 Hz
         if time.duration_seconds(time.since(t_display_updated)) > 1.0/60.0 {
@@ -123,6 +131,14 @@ runSpaceInvaders :: proc() {
             fmt.printf("%v ", count)
         }
 
+        
+        if mid_scan_int && t_since > 1.0/30.0 {
+            if state.int_enable {
+                generateInterrupt(&state, 1)
+                mid_scan_int = false
+            }
+        }
+
         //opcode : OpCode = auto_cast state.memory[state.pc]
         //if opcode == .IN {
         //    port := state.memory[state.pc+1]
@@ -136,14 +152,14 @@ runSpaceInvaders :: proc() {
         emuluate8080p(&state)
         //}
 
-        if time.duration_seconds(time.since(t_interrupt)) > 1.0/30.0 {
+        if t_since > 1.0/60.0 {
             if state.int_enable {
-                //generateInterrupt(&state, 2)
-                rst(&state, 2)
-
+                generateInterrupt(&state, 2)
                 t_interrupt = time.now()
+                mid_scan_int = true
             }
         }
+
     }
 
 }
