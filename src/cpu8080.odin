@@ -341,7 +341,6 @@ ora :: proc(reg1: u8, state: ^State8080) -> int {
     return 1
 }
 
-//Can be use for adi
 add :: proc(reg1: u8, state: ^State8080) -> int {
     result := u16(state.a) + u16(reg1)
     setZSPC(result, &state.cc)
@@ -360,12 +359,6 @@ sub :: proc(reg1: u8, state: ^State8080) -> int {
     return 1
 }
 
-adc :: proc(reg1: u8, state: ^State8080) -> int {
-    //TODO
-    state.a += reg1// + state.cc.cy
-    return 1
-}
-
 lxi :: proc(reg1: ^u8, reg2: ^u8, memory: []u8) -> int {
     reg1^ = memory[1]
     reg2^ = memory[0]
@@ -381,16 +374,14 @@ stax :: proc(high: u8, low: u8, state: ^State8080) -> int {
 inx :: proc(high: ^u8, low: ^u8) -> int {
     value := get_combined(high^, low^)
     value += 1
-    high^ = get_high(value)
-    low^ = get_low(value)
+    high^, low^ = getHighLow(value)
     return 1
 }
 
 dcx :: proc(high: ^u8, low: ^u8) -> int {
     value := get_combined(high^, low^)
     value -= 1
-    high^ = get_high(value)
-    low^ = get_low(value)
+    high^, low^ = getHighLow(value)
     return 1
 }
 
@@ -411,16 +402,15 @@ dcr :: proc(reg: ^u8, cc: ^ConditionCodes) -> int {
     return 1
 }
 
-//dad :: proc(reg1: u8, reg2: u8, state: ^State8080) -> int {
 dad :: proc(value: u16, state: ^State8080) -> int {
-    //value := get_combined(reg1, reg2)
     hl := u32(getHL(state)) + u32(value)
 
     state.cc.cy = (hl & 0xffff) != hl
 
     hl16 := u16(hl & 0xffff)
-    state.h = get_high(hl16)
-    state.l = get_low(hl16)
+    //state.h = get_high(hl16)
+    //state.l = get_low(hl16)
+    state.h, state.l = getHighLow(hl16)
 
     return 1
 }
@@ -435,13 +425,12 @@ cmp :: proc(value: u8, state: ^State8080) -> int {
 // Implement all the jump instructions. Since the differences are the
 // jump conditions, it is also passed in as an argument
 jump :: proc(state: ^State8080, cond: bool) -> (int, int) {
-    //pc_delt := 3
+    
     if !cond do return 3, 10
-    //if cond {
+    
     offset := getImmediate(state)
     state.pc = auto_cast offset
-    //pc_delt = 0
-    //}
+
     return 0, 10
 }
 
@@ -461,18 +450,6 @@ parity :: proc(value: u16, size: uint) -> bool {
 
     nbits := bits.count_ones(value2)
     return 0 == (nbits & 0x1)
-
-    /*
-    p := 0
-    value := (value & ((1<<size)-1))
-    for i := 0; i < int(size); i += 1 {
-        if (value & 0x1) != 0 do p += 1
-        value = value >> 1
-    }
-    
-    fmt.println("PARITY:", value, p, nbits)
-    return 0 == (p & 0x1)
-    */
 }
 
 swap :: proc(reg1: ^u8, reg2: ^u8) -> int {
@@ -504,7 +481,6 @@ call :: proc(state: ^State8080, cond: bool) -> (int, int) {
                 offset := getDE(state)
                 idx := offset + 3
                 for state.memory[idx] != '$' {
-                //for i in 0..<50 {
                     fmt.printf("%c", state.memory[idx])
                     idx += 1
                 }
@@ -520,8 +496,9 @@ call :: proc(state: ^State8080, cond: bool) -> (int, int) {
     }
 
     retAddr := u16(state.pc) + 3
-    state.memory[state.sp - 1] = get_high(retAddr)
-    state.memory[state.sp - 2] = get_low(retAddr)
+    //state.memory[state.sp - 1] = get_high(retAddr)
+    //state.memory[state.sp - 2] = get_low(retAddr)
+    state.memory[state.sp-1], state.memory[state.sp-2] = getHighLow(retAddr)
     state.sp -= 2
     state.pc = auto_cast getImmediate(state)
     return 0, 17
@@ -533,15 +510,6 @@ ret :: proc(state: ^State8080, cond: bool) -> (int, int) {
 
     low := state.memory[state.sp]
     high := state.memory[state.sp + 1]
-
-    retAddr := get_combined(high, low)
-
-    /*
-    tmp1 := state.memory[state.pc+1]
-    tmp2 := state.memory[state.pc+2]
-    tmp := get_combined(tmp2, tmp1)
-    fmt.printf("RET: %04x %04x\n", retAddr, tmp)
-    */
 
     state.pc = auto_cast get_combined(high, low)
     state.sp += 2
@@ -563,18 +531,6 @@ popR :: proc(reg1: ^u8, reg2: ^u8, state: ^State8080) -> int {
     reg1^ = state.memory[state.sp+1]
     state.sp += 2
     return 1
-}
-
-@(private="file")
-get_high :: proc(value: u16) -> u8 {
-    out : u8 = auto_cast (value >> 8) & 0xff
-    return out
-}
-
-@(private="file")
-get_low :: proc(value: u16) -> u8 {
-    out : u8 = auto_cast value & 0xff
-    return out
 }
 
 @(private="file")
@@ -625,10 +581,7 @@ u8ToConditionCodes :: proc(value: u8, cc: ^ConditionCodes) {
 }
 
 generateInterrupt :: proc(state: ^State8080, interrupt_num: int) {
-    //high := get_high(u16(state.pc))
-    //low := get_low(u16(state.pc))
     high, low := getHighLow(u16(state.pc))
-    //fmt.println("INTERRUPT:", state.pc)
     pushR(high, low, state)
     state.pc = 8 * interrupt_num
     state.int_enable = false
@@ -1055,8 +1008,6 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             ncycles = 7
             //TODO: Should I rewrite getM to be able to do this.
             //Currently getM returns a copy of the data and not a pointer
-            //data := getM(state)
-            //pc_delt = mov(&data, &state.a)
         case .MOV_A_B:
             pc_delt = mov(&state.a, &state.b)
             ncycles = 5

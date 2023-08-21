@@ -149,7 +149,7 @@ runCycles :: proc(state: ^State8080, ncycles: int) {
 }
 
 runSpaceInvaders :: proc() {
-    siMachine : SpaceInvadersMachine
+    //siMachine : SpaceInvadersMachine
 
     ports[0] = (1 << 1) | (1 << 2) | (1 << 3)
     ports[1] = 0
@@ -175,8 +175,8 @@ runSpaceInvaders :: proc() {
     t_frame := time.now()
     t_since : f64
 
-    siMachine.ports = ports
-    siMachine.shift = shift
+    //siMachine.ports = ports
+    //siMachine.shift = shift
     //siMachine.state = state
 
     ncycles_half_tic : int = auto_cast math.floor(CYCLES_PER_TIC / 2)
