@@ -93,26 +93,26 @@ handleInput :: proc() {
     if rl.IsKeyPressed(rl.KeyboardKey.A) do ports[1] |= 1 << 5
     if rl.IsKeyPressed(rl.KeyboardKey.D) do ports[1] |= 1 << 6
     if rl.IsKeyPressed(rl.KeyboardKey.S) do ports[1] |= 1 << 2
-    if rl.IsKeyPressed(rl.KeyboardKey.UP) do ports[1] |= 1 << 4
+    if rl.IsKeyPressed(rl.KeyboardKey.W) do ports[1] |= 1 << 4
 
     // 2P start/movement
     if rl.IsKeyPressed(rl.KeyboardKey.LEFT) do ports[2] |= 1 << 5
     if rl.IsKeyPressed(rl.KeyboardKey.RIGHT) do ports[2] |= 1 << 6
-    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) do ports[2] |= 1 << 1
+    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) do ports[1] |= 1 << 1
     if rl.IsKeyPressed(rl.KeyboardKey.UP) do ports[2] |= 1 << 4
 
     // When keys are releases, undo everything
-    if rl.IsKeyReleased(rl.KeyboardKey.C) do ports[1] |= 1
+    if rl.IsKeyReleased(rl.KeyboardKey.C) do ports[1] &~= 1
 
     if rl.IsKeyReleased(rl.KeyboardKey.A) do ports[1] &~= 1 << 5
     if rl.IsKeyReleased(rl.KeyboardKey.D) do ports[1] &~= 1 << 6
     if rl.IsKeyReleased(rl.KeyboardKey.S) do ports[1] &~= 1 << 2
-    if rl.IsKeyReleased(rl.KeyboardKey.UP) do ports[1] &~= 1 << 4
+    if rl.IsKeyReleased(rl.KeyboardKey.W) do ports[1] &~= 1 << 4
 
-    if rl.IsKeyPressed(rl.KeyboardKey.LEFT) do ports[2] &~= 1 << 5
-    if rl.IsKeyPressed(rl.KeyboardKey.RIGHT) do ports[2] &~= 1 << 6
-    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) do ports[2] &~= 1 << 1
-    if rl.IsKeyPressed(rl.KeyboardKey.UP) do ports[2] &~= 1 << 4
+    if rl.IsKeyReleased(rl.KeyboardKey.LEFT) do ports[2] &~= 1 << 5
+    if rl.IsKeyReleased(rl.KeyboardKey.RIGHT) do ports[2] &~= 1 << 6
+    if rl.IsKeyReleased(rl.KeyboardKey.ENTER) do ports[1] &~= 1 << 1
+    if rl.IsKeyReleased(rl.KeyboardKey.UP) do ports[2] &~= 1 << 4
 
 }
 

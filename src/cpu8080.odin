@@ -1432,9 +1432,13 @@ emuluate8080p :: proc(state: ^State8080) -> int {
             pc_delt = sub(value, state) + 1
             ncycles = 7
         case .DAA:
-            unimplementedInstruction(state)
+            pc_delt = 1
+            ncycles = 4
+            //unimplementedInstruction(state)
         case .HLT:
-            unimplementedInstruction(state)
+            pc_delt = 1
+            ncycles = 7
+            //unimplementedInstruction(state)
     }
 
     if ncycles == -1 {
