@@ -116,6 +116,13 @@ handleInput :: proc() {
 
 }
 
+generateInterrupt :: proc(state: ^State8080, interruptNum: int) {
+    high, low := getHighLow(u16(state.pc))
+    pushR(high, low, state)
+    state.pc = 8 * interruptNum
+    state.int_enable = false
+}
+
 runCycles :: proc(state: ^State8080, ncycles: int) {
     tot_cycles := 0
     cycle_opcode : int

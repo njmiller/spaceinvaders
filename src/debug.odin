@@ -34,7 +34,7 @@ byteInstruction :: proc(text: string, data: u8) -> int {
 
 twoByteInstruction :: proc(text: string, data1: u8, data2: u8) -> int {
     fmt.printf(text)
-    value := get_combined(data1, data2)
+    value := getCombined(data1, data2)
     fmt.printf("$%04x", value)
     fmt.printf("\n")
     return 3
