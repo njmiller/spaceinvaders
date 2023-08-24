@@ -306,6 +306,12 @@ setZSP :: proc(result: u16, cc: ^ConditionCodes) {
     cc.p = parity(result, 8)
 }
 
+setZSP8 :: proc(result: u16, cc: ^ConditionCodes) {
+    cc.z = result == 0
+    cc.s = (result & 0x80) != 0
+    //cc.p - parity(result, 8)
+}
+
 setZSPC :: proc(result: u16, cc: ^ConditionCodes) {
     setZSP(result, cc)
     cc.cy = result > 0xff
